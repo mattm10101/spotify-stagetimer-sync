@@ -1,24 +1,17 @@
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals: { supabase, session } }) => {
-  // If there's no session, return early
+export const load: PageServerLoad = async ({ url, locals: { session } }) => {
   if (!session) {
-    return { session: null, playlists: [] };
+    return {
+      session: null,
+      debugData: 'No session was found by the server.',
+      origin: url.origin // Pass the origin to the page
+    };
   }
 
-  // If there is a session, fetch playlists
-  const response = await fetch('https://api.spotify.com/v1/me/playlists', {
-    headers: {
-      Authorization: `Bearer ${session.provider_token}`,
-    },
-  });
-
-  if (!response.ok) {
-    console.error('Failed to fetch playlists');
-    return { session, playlists: [] }; // Return empty playlists on failure
-  }
-
-  const playlistData = await response.json();
-
-  return { session, playlists: playlistData.items || [] };
+  return {
+    session,
+    debugData: JSON.stringify(session, null, 2),
+    origin: url.origin // Pass the origin to the page
+  };
 };
