@@ -1,39 +1,52 @@
 <script lang="ts">
-  import type { PageData } from './$types';
+  import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
+  import type { Session } from '@supabase/supabase-js';
 
-  export let data: PageData;
-  $: ({ session, debugData, origin } = data);
+  let session: Session | null = null;
+
+  onMount(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      session = data.session;
+    });
+
+    supabase.auth.onAuthStateChange((_event, newSession) => {
+      session = newSession;
+    });
+  });
+
+  async function signInWithSpotify() {
+    await supabase.auth.signInWithOAuth({
+      provider: 'spotify',
+      options: {
+        scopes: 'user-read-playback-state user-modify-playback-state playlist-read-private',
+      },
+    });
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
 </script>
 
 <main class="container">
-  {#if debugData}
-    <div class="debug-box">
-      <h3>Session Data from Server:</h3>
-      <pre>{debugData}</pre>
-    </div>
-  {/if}
-
   {#if session}
-    <div class="user-info">
-      <h2>Welcome, {session.user.user_metadata?.name}!</h2>
-      <p>Login successful. See session data above.</p>
+    <div class="profile-section">
+      <img
+        src={session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture}
+        alt="User Avatar"
+        class="avatar"
+      />
+      <div class="user-info">
+        <h2>Welcome, {session.user.user_metadata?.name}!</h2>
+        <button on:click={signOut} class="button">Sign Out</button>
+      </div>
     </div>
   {:else}
     <div class="user-info">
       <h2>Spotify Sync</h2>
       <p>Please sign in to continue.</p>
-      <button
-        on:click={async () =>
-          await supabase.auth.signInWithOAuth({
-            provider: 'spotify',
-            options: {
-              scopes: 'user-read-playback-state user-modify-playback-state playlist-read-private',
-              redirectTo: `${origin}/auth/callback` // <-- THE FIX IS HERE
-            }
-          })}
-        class="button"
-      >
+      <button on:click={signInWithSpotify} class="button">
         Sign in with Spotify
       </button>
     </div>
@@ -42,21 +55,25 @@
 
 <style>
   .container {
-    padding: 2rem; background-color: #121212; color: white;
-    font-family: system-ui, sans-serif; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; width: 100vw; height: 100vh;
+    padding: 2rem; background-color: #121212;
+    color: white; font-family: system-ui, sans-serif; box-sizing: border-box;
   }
-  .user-info { text-align: center; margin-top: 2rem; }
+  .avatar {
+    width: 80px; height: 80px; border-radius: 50%; border: 3px solid #1db954;
+  }
+  .user-info {
+    display: flex; flex-direction: column; align-items: center;
+  }
   .button {
     cursor: pointer; border: none; padding: 12px 24px; margin-top: 20px;
-    border-radius: 50px; background-color: #1db954; color: white;
-    font-weight: bold; font-size: 1rem;
+    border-radius: 50px; background-color: #1db954; color: white; font-weight: bold;
+    text-decoration: none; transition: transform 0.2s; font-size: 1rem;
   }
-  .debug-box {
-    background-color: #282828; border: 1px solid #444; padding: 1rem;
-    border-radius: 8px; max-width: 800px; margin: 2rem auto; text-align: left;
-  }
-  pre {
-    white-space: pre-wrap; word-break: break-all;
-    font-family: monospace; font-size: 0.9rem;
+  .button:hover { transform: scale(1.05); }
+  .profile-section {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 1rem;
   }
 </style>
