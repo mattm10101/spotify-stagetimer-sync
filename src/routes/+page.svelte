@@ -4,16 +4,45 @@
   import type { Session } from '@supabase/supabase-js';
 
   let session: Session | null = null;
+  let playlists: any[] = [];
+  let isLoading = false;
 
   onMount(() => {
     supabase.auth.getSession().then(({ data }) => {
       session = data.session;
+      if (session) {
+        fetchPlaylists(session);
+      }
     });
 
     supabase.auth.onAuthStateChange((_event, newSession) => {
       session = newSession;
+      if (newSession) {
+        fetchPlaylists(newSession);
+      } else {
+        playlists = []; // Clear playlists on logout
+      }
     });
   });
+
+  async function fetchPlaylists(currentSession: Session) {
+    if (!currentSession.provider_token) return;
+    isLoading = true;
+    try {
+      const response = await fetch('https://api.spotify.com/v1/me/playlists', {
+        headers: {
+          Authorization: `Bearer ${currentSession.provider_token}`,
+        },
+      });
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
+      playlists = data.items;
+    } catch (error) {
+      console.error('Error fetching playlists:', error);
+    } finally {
+      isLoading = false;
+    }
+  }
 
   async function signInWithSpotify() {
     await supabase.auth.signInWithOAuth({
@@ -42,6 +71,26 @@
         <button on:click={signOut} class="button">Sign Out</button>
       </div>
     </div>
+
+    <div class="playlist-section">
+      <h3>Your Playlists</h3>
+      {#if isLoading}
+        <p>Loading playlists...</p>
+      {:else if playlists.length > 0}
+        <ul class="playlist-grid">
+          {#each playlists as playlist}
+            <li class="playlist-item">
+              <img
+                src={playlist.images[0]?.url}
+                alt="{playlist.name} cover"
+                class="playlist-cover"
+              />
+              <span class="playlist-name">{playlist.name}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
   {:else}
     <div class="user-info">
       <h2>Spotify Sync</h2>
@@ -55,16 +104,15 @@
 
 <style>
   .container {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; width: 100vw; height: 100vh;
-    padding: 2rem; background-color: #121212;
+    display: flex; flex-direction: column; align-items: center; width: 100vw;
+    min-height: 100vh; padding: 2rem; background-color: #121212;
     color: white; font-family: system-ui, sans-serif; box-sizing: border-box;
   }
   .avatar {
     width: 80px; height: 80px; border-radius: 50%; border: 3px solid #1db954;
   }
   .user-info {
-    display: flex; flex-direction: column; align-items: center;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
   }
   .button {
     cursor: pointer; border: none; padding: 12px 24px; margin-top: 20px;
@@ -74,6 +122,22 @@
   .button:hover { transform: scale(1.05); }
   .profile-section {
     display: flex; flex-direction: column; align-items: center;
-    gap: 1rem;
+    gap: 1rem; margin-bottom: 2rem;
   }
+  .playlist-section {
+    width: 100%; max-width: 900px; text-align: center;
+  }
+  .playlist-grid {
+    list-style: none; padding: 0; margin-top: 1.5rem; display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.5rem;
+  }
+  .playlist-item {
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center; gap: 0.5rem;
+  }
+  .playlist-cover {
+    width: 150px; height: 150px; object-fit: cover; border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  }
+  .playlist-name { font-size: 0.9rem; font-weight: 500; }
 </style>
